@@ -4,10 +4,13 @@ export default {
 
   // Target: https://go.nuxtjs.dev/config-target
   target: 'static',
+  router: {
+    base: '/What2Play/'
+  },
 
   // Global page headers: https://go.nuxtjs.dev/config-head
   head: {
-    title: 'What2Play',
+    title: 'What To Play',
     htmlAttrs: {
       lang: 'en'
     },
