@@ -7,6 +7,7 @@
           label="Load from BGG Collection">
           <b-input-group>
             <b-form-input
+              id="input-username"
               v-model="username"
               v-on:keyup.enter="getCollection"
               :state="usernameValidationState"
@@ -15,6 +16,11 @@
                 <BIconSearch/>
             </b-input-group-append>
           </b-input-group>
+          <b-button
+            v-if="collectionGames.length > 0"
+            @click="collectionGames = []">
+            Clear Games
+          </b-button>
         </b-form-group>
 
         <button @click="openGameSearchModal()">
@@ -39,7 +45,7 @@
                   v-for="game, index in search.basegames"
                   :game="game"
                   :key="index"
-                  @click.native="addGame(game.id)"
+                  @click.native="handleClickonSearchedGame(game.id)"
                 />
               </b-list-group>
             </div>
@@ -50,7 +56,7 @@
                   v-for="game, index in search.expansions"
                   :game="game"
                   :key="index"
-                  @click.native="addGame(game.id)"
+                  @click.native="handleClickonSearchedGame(game.id)"
                 />
               </b-list-group>
             </div>
@@ -61,6 +67,29 @@
               </b-button>
             </template>
         </b-modal>
+
+        <b-form-group
+            v-if="extraGames.length"
+            label="Extra Games"
+            label-cols>
+            <b-input-group>
+              <b-form-tags disabled placeholder="">
+                <b-form-tag
+                  v-for="game, index in extraGames"
+                  :key="index"
+                  @remove="removeExtraGame(game.id)">
+                    {{game.name}}
+                </b-form-tag>
+                <b-form-tag
+                  v-if="extraGames.length > 1"
+                  no-remove
+                  variant="danger"
+                  @click.native="clearAllExtraGames()">
+                  clear
+                </b-form-tag>
+              </b-form-tags>
+            </b-input-group>
+          </b-form-group>
 
         <b-card title="Filter games">
 
@@ -121,20 +150,25 @@
 
       </b-col>
     </b-row>
+    <hr>
     <b-row>
       <b-col>
         <b-row>
           <b-col>
-            <h1>Available Games</h1>
+            <h3>{{filteredGames.length}} Games to choose from:</h3>
           </b-col>
           <b-col>
-            <div v-if="games.length > 1" >
+            <div v-if="displayGames.length > 1" >
               <b-button v-if="filter.randomGame == null" @click='randomGame'>Pick A Random Game For Me</b-button>
               <b-button v-else @click='filter.randomGame = null'>See All Games</b-button>
             </div>
           </b-col>
           <b-col>
             <BIconGear @click="showSettingsModal = true" />
+            <BIconShare
+              v-b-tooltip.hover
+              title="Copy Permalink"
+              @click="copyPermalink()" />
           </b-col>
         </b-row>
         <b-table
@@ -152,7 +186,7 @@
           :items="displayGames">
 
           <template #cell(thumbnail)="data">
-            <b-img-lazy :src="data.value" height="80px" alt="thumbnail" />
+            <b-img-lazy :src="data.value" height="80px"/>
           </template>
 
           <template #cell(name)="data">
@@ -261,18 +295,18 @@
         </b-form-group>
       </b-card>
     </b-modal>
+    <v-tour name="myTour" :steps="steps" />
   </b-container>
 </template>
 
 <script>
-import {BIconSearch, BIconPlus, BIconGear} from 'bootstrap-vue'
+import {BIconSearch, BIconPlus, BIconGear, BIconShare} from 'bootstrap-vue'
 import GameSearchResult from '~/components/gameSearchResult.vue'
+import VueTour from 'vue-tour'
+Vue.use(VueTour)
 const entities = require("entities")
 var parseString = require('xml2js').parseString;
 import Vue from 'vue'
-import VueCookies from 'vue-cookies'
-Vue.use(VueCookies)
-Vue.$cookies.config(-1)
 
 export default {
   name: 'App',
@@ -280,11 +314,20 @@ export default {
     BIconSearch,
     BIconPlus,
     BIconGear,
+    BIconShare,
     GameSearchResult
   },
   data () {
     return {
-      collapse: true,
+      steps: [
+        {
+          target: '#input-username',
+          header: {
+            title: 'test step',
+          },
+          content: 'test step.'
+        }
+      ],
       loadingCollection: false,
       username: '',
       usernameValidationState: null,
@@ -293,11 +336,6 @@ export default {
         query: '',
         basegames: [],
         expansions: []
-      },
-      cookies: {
-        username: (un) => {this.username = un},
-        extragames: this.getExtraGames,
-        settings: (settings) => {this.settings = settings}
       },
       showSettingsModal: false,
       settings: {
@@ -317,7 +355,7 @@ export default {
           complexity: true
         }
       },
-      games: [],
+      collectionGames: [],
       extraGames: [],
       filteredGames: [],
       filter: {
@@ -374,7 +412,8 @@ export default {
   },
   computed: {
     displayGames () {
-      return this.games.map((game) => {
+      let allGames = this.collectionGames.concat(this.extraGames)
+      return allGames.map((game) => {
         game.matchesSome = false
         game.matchesAll = true
         game.tags = game.tags.map((tag) => {
@@ -405,66 +444,105 @@ export default {
         }
       }
       return result
-    },
-    setCookies () {
-      this.$cookies.set("settings", this.settings)
-      return this.settings
     }
   },
   watch: {
-    // TODO: this doesnt work
     settings: {
-      handler: function(fresh) {
-        this.$cookies.set("settings", fresh)
+      handler: function(settings) {
+        const parsed = JSON.stringify(settings)
+        localStorage.setItem('settings', parsed)
       },
       deep: true
-    }
+    },
+    filter: {
+      handler: function(filter) {
+        const parsed = JSON.stringify(filter)
+        localStorage.setItem('filter', parsed)
+      },
+      deep: true
+    },
+    extraGames: function(games) {
+        const ids = games.map(game => game.id)
+        const parsed = JSON.stringify(ids)
+        localStorage.setItem('extragames', parsed)
+      },
+      deep: true
   },
   mounted () {
     console.clear()
+    // this.$tours['myTour'].start()
 
-    this.search.basegames = [
-      {
-        name: 'Azul',
-        year: '2016',
-        thumbnail: 'https://cf.geekdo-images.com/RrYR1xB8H7D1B5GwNV8jgQ__thumb/img/vUGmS3mniayuyVOG-1ulrVGnjSg=/fit-in/200x150/filters:strip_icc()/pic4212417.jpg'
-       },
-      {
-        name: 'Codenames',
-        year: '2019',
-        thumbnail: 'https://cf.geekdo-images.com/F_KDEu0GjdClml8N7c8Imw__thumb/img/yl8iXxSNwguMeg3KkmfFO9SMVVc=/fit-in/200x150/filters:strip_icc()/pic2582929.jpg'
-       },
-    ]
-    this.search.expansions = [
-      {
-        name: 'Azul',
-        year: '2016',
-        thumbnail: 'https://cf.geekdo-images.com/RrYR1xB8H7D1B5GwNV8jgQ__thumb/img/vUGmS3mniayuyVOG-1ulrVGnjSg=/fit-in/200x150/filters:strip_icc()/pic4212417.jpg'
-       },
-      {
-        name: 'Codenames',
-        year: '2019',
-        thumbnail: 'https://cf.geekdo-images.com/F_KDEu0GjdClml8N7c8Imw__thumb/img/yl8iXxSNwguMeg3KkmfFO9SMVVc=/fit-in/200x150/filters:strip_icc()/pic2582929.jpg'
-       },
-    ]
-    this.search.showModal = true
-
-    // Handle url params
-    let searchParams = new URLSearchParams(new URL(window.location.href).search)
-    for(let [key, value] of searchParams) {
-      switch (key) {
-        case 'username':
-          this.username = value
-          this.getCollection()
-          break
-        case 'games':
-          this.extraGames = value.split(',')
-          this.getExtraGames()
-        default: break
+    // Check for url params
+    // let searchParams = new URLSearchParams(window.location.search)
+    const urlSearchParams = new URLSearchParams(window.location.search)
+    const params = Object.fromEntries(urlSearchParams.entries())
+    console.log(params)
+    if(Object.keys(params).length) {
+      for(const [key, value] of Object.entries(params)) {
+        switch (key) {
+          case 'username':
+            this.username = value
+            this.getCollection()
+            break
+          case 'games':
+            this.getExtraGames(value.split(','))
+            break
+          case 'filterName':
+            this.filter.name = value
+            break
+          case 'filterNumPlayers':
+            this.filter.numplayers = value
+            break
+          case 'filterPlayTime':
+            this.filter.playtime = value
+            break
+          case 'filterYear':
+            this.filter.publishyear.value = value
+            break
+          case 'filterOlder':
+            this.filter.publishyear.olderThan = value
+            break
+          case 'filterTags':
+            // Do this later, it's complicated
+            // this.setFilterTagsFromURL(value.split(',',this.tagColors.length))
+            break
+          case 'filterAnyTag':
+            this.filter.anyTag = value
+            break
+          default: break
+        }
       }
     }
-
-     this.checkForCookies()
+    // If there were no URL params, check local storage
+    else {
+      if (localStorage.getItem('extragames')) {
+        try {
+          const extraGames = JSON.parse(localStorage.getItem('extragames'))
+          this.getExtraGames(extraGames)
+        } catch(e) {
+          localStorage.removeItem('extragames')
+        }
+      }
+      if (localStorage.getItem('filter')) {
+        try {
+          this.filter = JSON.parse(localStorage.getItem('filter'))
+        } catch(e) {
+          localStorage.removeItem('filter')
+        }
+      }
+      if (localStorage.username) {
+        this.username = localStorage.username
+        this.getCollection()
+      }
+    }
+    // Either way, get settings from localStorage
+    if (localStorage.getItem('settings')) {
+      try {
+        this.settings = JSON.parse(localStorage.getItem('settings'))
+      } catch(e) {
+        localStorage.removeItem('settings')
+      }
+    }
     // this.getCollection()
   },
   methods: {
@@ -513,6 +591,9 @@ export default {
         this.doToast('Slow down there', "That's probably enough tags.")
       }
     },
+    setFilterTagsFromURL (tags) {
+
+    },
     removeFilterTag (tag) {
       this.filter.tags = this.filter.tags.filter(t => t.id !== tag.id)
     },
@@ -529,13 +610,12 @@ export default {
         return
       }
       this.usernameValidationState = null
-      this.$cookies.set("username", this.username)
+      localStorage.username = this.username
       this.loadingCollection = true
       let results
       let url = `collection?username=${this.username}&own=1`
       results = await this.tryGet(url, 'Invalid Username', 'That does not appear to be a valid username on BoardGameGeek.com')
-      console.log(results)
-      if(!results) {
+      if(!results) { // tryGet returned null, probably because cross-origin error, which appears to be that the username didn't exist
         this.loadingCollection = false
         return
       }
@@ -552,7 +632,12 @@ export default {
       const strung = gameIds.join()
       url = `thing?id=${strung}&stats=1`
       results = await this.tryGet(url)
-      this.games = this.mapGameObjects(results.items.item)
+      if(!results) {
+        this.loadingCollection = false
+        return
+      }
+      this.collectionGames = this.mapGameObjects(results.items.item)
+      this.doToast('Games added', `Successfully added ${gameIds.length} games from ${this.username}'s collection of owned games.`, 'success')
       this.loadingCollection = false
     },
     getGameURL(game) {
@@ -602,33 +687,55 @@ export default {
       url = `thing?id=${idString}`
       parsed = await this.tryGet(url)
       parsed.items.item.map((res) => {
-        this.search.basegames.find(game => game.id == res.$.id).thumbnail = res.thumbnail?.[0]
+        let foundGame = this.search.basegames.find(game => game.id == res.$.id)
+        if(foundGame) {
+          foundGame.thumbnail = res.thumbnail?.[0]
+        }
       })
       // Start fetching expansion thumbnails
       idString = expansions.map(game => game.id).join(',')
       url = `thing?id=${idString}`
       parsed = await this.tryGet(url)
       parsed.items.item.map((res) => {
-        this.search.expansions.find(game => game.id == res.$.id).thumbnail = res.thumbnail?.[0]
+        let foundGame = this.search.expansions.find(game => game.id == res.$.id)
+        if(foundGame) {
+          foundGame.thumbnail = res.thumbnail?.[0]
+        }
       })
     },
     randomGame () {
       this.filter.randomGame = this.filteredGames[Math.floor(Math.random() * this.filteredGames.length)].id
     },
-    async getExtraGames() {
-
-
+    clearAllExtraGames () {
+      this.extraGames = []
     },
-    async addGame(id) {
-      if( this.games.some((game) => { return game.id == id}) ) {
+    removeExtraGame (id) {
+      const foundGame = this.extraGames.findIndex(game => game.id == id)
+      if(foundGame >= 0) {
+        this.extraGames.splice(foundGame, 1)
+      } else {
+        console.error('could not find game to remove', id)
+      }
+    },
+    async getExtraGames(gameIds) {
+      for(let id of gameIds) {
+        const url = `thing?id=${id}&stats=1`
+        const parsed = await this.tryGet(url)
+        if(parsed.items.item) {
+          const newGame = this.mapGameObjects(parsed.items.item)
+          this.extraGames.push(...newGame)
+          this.doToast('Game Added', `${newGame[0].name} was added to the list`, 'success')
+        } else {
+          this.doToast('Oops', 'Failed to add game ID: ' + id, 'danger')
+        }
+      }
+    },
+    async handleClickonSearchedGame(id) {
+      if( this.displayGames.some((game) => { return game.id == id}) ) {
         this.doToast('Hey', 'That game is already in the list.', 'info')
         return
       }
-      const url = `thing?id=${id}&stats=1`
-      const parsed = await this.tryGet(url)
-      const newGame = this.mapGameObjects(parsed.items.item)
-      this.games.push(...newGame)
-      this.doToast('Game Added', `${newGame[0].name} was added to the list`, 'success')
+      this.getExtraGames([id])
       this.searchTerm = ''
       this.$refs['search-box'].select()
       this.search.basegames = []
@@ -648,7 +755,7 @@ export default {
         })
         return {
           id: game.$.id,
-          thumbnail: game.thumbnail[0],
+          thumbnail: game.thumbnail?.[0],
           name: game.name[0].$.value,
           complexity: parseFloat(game.statistics[0].ratings[0].averageweight[0].$.value).toFixed(2),
           complexityVotes: game.statistics[0].ratings[0].numweights[0].$.value,
@@ -663,14 +770,6 @@ export default {
           publishyear: game.yearpublished[0].$.value,
           description: entities.decodeHTML(game.description[0]),
           tags
-        }
-      })
-    },
-    checkForCookies() {
-      Object.entries(this.cookies).map((cookie) => {
-        const result = this.$cookies.get(cookie[0])
-        if(result) {
-          cookie[1](result)
         }
       })
     },
@@ -691,11 +790,48 @@ export default {
         return null
       }
     },
-    doToast(title, message, variant) {
+    doToast(title, message, variant = 'info') {
       this.$bvToast.toast(message, {
         title,
         variant
       })
+    },
+    copyPermalink () {
+      try {
+        if (!navigator.clipboard) throw "oops"
+
+        const encodeParams = {
+          'username': this.username,
+          'games': this.extraGames.length ? this.extraGames.map(game => game.id).join() : null,
+          'filterName': this.filter.name,
+          'filterNumPlayers': this.filter.numplayers,
+          'filterPlayTime': this.filter.playtime,
+          'filterYear': this.filter.publishyear.value,
+          'filterOlder': this.filter.publishyear.olderThan,
+          'filterAnyTag': this.filter.anyTag,
+        }
+
+
+        console.log(this.extraGames)
+        console.log(encodeParams)
+
+        let text = window.location + '?'
+        let and = false
+        for(const [key, value] of Object.entries(encodeParams)) {
+          if(value) {
+            text += (and ? '&' : '') + `${key}=${value}`
+            and = true
+          }
+        }
+        console.log(text)
+        navigator.clipboard.writeText(text).then(() => {
+          this.doToast('Success', 'Permalink copied to clipboard', 'success')
+        }, (err) => {
+          throw "oops"
+        })
+      } catch (error) {
+        this.doToast('Copy Failed.', 'Your browser does not support this operation.', 'danger')
+      }
     }
   }
 }
