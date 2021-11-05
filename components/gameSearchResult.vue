@@ -3,8 +3,10 @@
   <b-list-group-item button size="sm">
     <b-row>
     <b-col>
-      <b-img-lazy v-if="game.thumbnail"  :src="game.thumbnail" height="80px" />
-      <b-skeleton-img v-else no-aspect height="50px" width="50px"/>
+      <div width="80px">
+        <b-img-lazy v-if="game.thumbnail"  :src="game.thumbnail" height="80px"/>
+        <b-skeleton-img v-else no-aspect height="50px" width="50px"/>
+      </div>
     </b-col>
     <b-col>
       <b>{{game.name}}</b>

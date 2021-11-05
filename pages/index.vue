@@ -23,7 +23,7 @@
           </b-button>
         </b-form-group>
 
-        <button @click="openGameSearchModal()">
+        <button id="btn-addgames" @click="openGameSearchModal()">
           Add Games
         </button>
         <b-modal v-model="search.showModal" title="Add a Game">
@@ -91,7 +91,7 @@
             </b-input-group>
           </b-form-group>
 
-        <b-card title="Filter games">
+        <b-card id="filter-box" title="Filter games">
 
           <b-form-group
             v-if="settings.showColumns.players"
@@ -145,11 +145,9 @@
           </b-form-group>
 
         </b-card>
-
-
-
       </b-col>
     </b-row>
+
     <hr>
     <b-row>
       <b-col>
@@ -159,9 +157,23 @@
           </b-col>
           <b-col>
             <div v-if="displayGames.length > 1" >
-              <b-button v-if="filter.randomGame == null" @click='randomGame'>Pick A Random Game For Me</b-button>
+              <b-button id="btn-random" v-if="filter.randomGame == null" @click='doRandomGame'>Pick A Random Game For Me</b-button>
               <b-button v-else @click='filter.randomGame = null'>See All Games</b-button>
             </div>
+            <b-modal v-model="randomGameModal" ok-only title="You should play...">
+              <div v-if="randomGameModal" >
+                <a target="_blank" :href="getGameURL(randomGame.id)">
+                  <img :src="randomGame.image" width="100%" alt="">
+                </a>
+              </div>
+              <b-row>
+                <b-col>
+                  <b-button size="sm" variant="secondary" @click="doRandomGame()">
+                      No, not that one..
+                  </b-button>
+                </b-col>
+              </b-row>
+            </b-modal>
           </b-col>
           <b-col>
             <BIconGear @click="showSettingsModal = true" />
@@ -169,6 +181,10 @@
               v-b-tooltip.hover
               title="Copy Permalink"
               @click="copyPermalink()" />
+            <BIconQuestionCircle
+              v-b-tooltip.hover
+              title="Take the Tour"
+              @click="startTour()" />
           </b-col>
         </b-row>
         <b-table
@@ -223,6 +239,7 @@
 
           <template #cell(tags)="data">
             <b-form-tags
+              class="tags-table"
               disabled>
                 <b-form-tag
                   v-for="tag, index in data.value"
@@ -295,14 +312,16 @@
         </b-form-group>
       </b-card>
     </b-modal>
-    <v-tour name="myTour" :steps="steps" />
+    <v-tour name="tour" :options="tourParams" :steps="steps" />
   </b-container>
 </template>
 
 <script>
-import {BIconSearch, BIconPlus, BIconGear, BIconShare} from 'bootstrap-vue'
+import {BIconSearch, BIconPlus, BIconGear, BIconShare, BIconQuestionCircle} from 'bootstrap-vue'
 import GameSearchResult from '~/components/gameSearchResult.vue'
 import VueTour from 'vue-tour'
+require('vue-tour/dist/vue-tour.css')
+import Steps from './tourSteps'
 Vue.use(VueTour)
 const entities = require("entities")
 var parseString = require('xml2js').parseString;
@@ -315,19 +334,18 @@ export default {
     BIconPlus,
     BIconGear,
     BIconShare,
+    BIconQuestionCircle,
     GameSearchResult
   },
   data () {
     return {
-      steps: [
-        {
-          target: '#input-username',
-          header: {
-            title: 'test step',
-          },
-          content: 'test step.'
-        }
-      ],
+      steps: Steps,
+      tourParams: {
+        highlight: false,
+        debug: true,
+        enableScrolling: false
+      },
+      notour: false,
       loadingCollection: false,
       username: '',
       usernameValidationState: null,
@@ -355,6 +373,7 @@ export default {
           complexity: true
         }
       },
+      randomGameModal: false,
       collectionGames: [],
       extraGames: [],
       filteredGames: [],
@@ -470,7 +489,6 @@ export default {
   },
   mounted () {
     console.clear()
-    // this.$tours['myTour'].start()
 
     // Check for url params
     // let searchParams = new URLSearchParams(window.location.search)
@@ -543,9 +561,17 @@ export default {
         localStorage.removeItem('settings')
       }
     }
-    // this.getCollection()
+    if (localStorage.notour) {
+      this.notour = localStorage.notour
+    } else {
+      localStorage.setItem('notour', true)
+      this.startTour()
+    }
   },
   methods: {
+    startTour () {
+      this.$tours['tour'].start()
+    },
     openGameSearchModal () {
       this.search.showModal = true
       let that = this
@@ -554,7 +580,6 @@ export default {
       })
     },
     filterGames (game, filter) {
-      if(filter.randomGame && filter.randomGame !== game.id) return false
       if (filter.numplayers && filter.numplayers > game.maxplayers) return false
       if (filter.numplayers && filter.numplayers < game.minplayers) return false
       if (filter.playtime && filter.playtime > game.maxplaytime) return false
@@ -605,40 +630,40 @@ export default {
       return style
     },
     async getCollection () {
-      if(this.username?.length <= 0) {
-        this.usernameValidationState = false
-        return
-      }
-      this.usernameValidationState = null
-      localStorage.username = this.username
-      this.loadingCollection = true
-      let results
-      let url = `collection?username=${this.username}&own=1`
-      results = await this.tryGet(url, 'Invalid Username', 'That does not appear to be a valid username on BoardGameGeek.com')
-      if(!results) { // tryGet returned null, probably because cross-origin error, which appears to be that the username didn't exist
+      try {
+        if(this.username?.length <= 0) {
+          this.usernameValidationState = false
+          throw ['No username', `Please enter a valid BGG username`, 'info']
+        }
+        this.usernameValidationState = null
+        localStorage.username = this.username
+        this.loadingCollection = true
+        let results
+        let url = `collection?username=${this.username}&own=1`
+        results = await this.tryGet(url)
+        if(!results) { // tryGet returned null, probably because cross-origin error, which appears to be that the username didn't exist
+          throw ['Invalid Username', 'That does not appear to be a valid username on BoardGameGeek.com', 'danger']
+        }
+        if(results.message){
+          throw ['Error from BGG', `Message: ${results.message}`, 'danger']
+        }
+        if(!(results.items?.item?.length)) {
+          throw ['No Games', `There does not appear to be any games in this user's collection`, 'info']
+        }
+        const gameIds = results.items.item.map((game) => {return game.$.objectid})
+        const strung = gameIds.join()
+        url = `thing?id=${strung}&stats=1`
+        results = await this.tryGet(url)
+        if(!results) {
+          throw ['Problem', `There was a problem fetching the games in this user's collection`, 'danger']
+        }
+        this.collectionGames = this.mapGameObjects(results.items.item)
+        this.doToast('Games added', `Successfully added ${gameIds.length} games from ${this.username}'s collection of owned games.`, 'success')
+      } catch ([title, message, variant]) {
+        this.doToast(title, message, variant)
+      } finally {
         this.loadingCollection = false
-        return
       }
-      if(results.message){
-        this.doToast('Error from BGG', `Message: ${results.message}`, 'danger')
-        this.loadingCollection = false
-      }
-      if(!(results.items?.item?.length)) {
-        this.doToast('No Games', `There does not appear to be any games in this user's collection`, 'info')
-        this.loadingCollection = false
-        return
-      }
-      const gameIds = results.items.item.map((game) => {return game.$.objectid})
-      const strung = gameIds.join()
-      url = `thing?id=${strung}&stats=1`
-      results = await this.tryGet(url)
-      if(!results) {
-        this.loadingCollection = false
-        return
-      }
-      this.collectionGames = this.mapGameObjects(results.items.item)
-      this.doToast('Games added', `Successfully added ${gameIds.length} games from ${this.username}'s collection of owned games.`, 'success')
-      this.loadingCollection = false
     },
     getGameURL(game) {
       return "https://boardgamegeek.com/boardgame/" + game
@@ -703,8 +728,15 @@ export default {
         }
       })
     },
-    randomGame () {
-      this.filter.randomGame = this.filteredGames[Math.floor(Math.random() * this.filteredGames.length)].id
+    doRandomGame () {
+      this.randomGameModal = false
+      if(this.filterGames.length >= 2) {
+        const currGame = this.randomGame?.id
+        do {
+          this.randomGame = this.filteredGames[Math.floor(Math.random() * this.filteredGames.length)]
+        } while (currGame == this.randomGame.id)
+        this.randomGameModal = true
+      }
     },
     clearAllExtraGames () {
       this.extraGames = []
@@ -755,6 +787,7 @@ export default {
         })
         return {
           id: game.$.id,
+          image: game.image?.[0],
           thumbnail: game.thumbnail?.[0],
           name: game.name[0].$.value,
           complexity: parseFloat(game.statistics[0].ratings[0].averageweight[0].$.value).toFixed(2),
