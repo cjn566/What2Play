@@ -17,7 +17,7 @@ export default
     },
     {
       target: '#filter-box',
-      content: 'After you have a number if games listed in the table, you can set parameters here to narrow down which game you want to play.'
+      content: 'After you have a number of games listed in the table, you can dial in which one you want to play using these settings.'
     },
     {
       target: '.tags-table',

@@ -69,37 +69,49 @@
         </b-modal>
 
         <b-form-group
-            v-if="extraGames.length"
-            label="Extra Games"
-            label-cols>
-            <b-input-group>
-              <b-form-tags disabled placeholder="">
-                <b-form-tag
-                  v-for="game, index in extraGames"
-                  :key="index"
-                  @remove="removeExtraGame(game.id)">
-                    {{game.name}}
-                </b-form-tag>
-                <b-form-tag
-                  v-if="extraGames.length > 1"
-                  no-remove
-                  variant="danger"
-                  @click.native="clearAllExtraGames()">
-                  clear
-                </b-form-tag>
-              </b-form-tags>
-            </b-input-group>
-          </b-form-group>
+          v-if="extraGames.length"
+          label="Extra Games"
+          label-cols>
+          <b-input-group>
+            <b-form-tags disabled placeholder="">
+              <b-form-tag
+                v-for="game, index in extraGames"
+                :key="index"
+                @remove="removeExtraGame(game.id)">
+                  {{game.name}}
+              </b-form-tag>
+              <b-form-tag
+                v-if="extraGames.length > 1"
+                no-remove
+                variant="danger"
+                @click.native="clearAllExtraGames()">
+                clear
+              </b-form-tag>
+            </b-form-tags>
+          </b-input-group>
+        </b-form-group>
 
         <b-card id="filter-box" title="Filter games">
+
+          <b-form-group
+            v-if="settings.showColumns.complexity"
+            label="complexity"
+            label-cols>
+            <DoubleSlider v-model="sliderComplexity" :options="sliderOptsComplexity"/>
+          </b-form-group>
 
           <b-form-group
             v-if="settings.showColumns.players"
             label="Number Of Players"
             label-cols>
-            <b-form-input
-              v-model="filter.numplayers"
-              type="number" />
+            <DoubleSlider v-model="sliderNumPlayers" :options="sliderOptsNumPlayers"/>
+          </b-form-group>
+
+          <b-form-group
+            v-if="settings.showColumns.playtime"
+            label="Play Time (mins)"
+            label-cols>
+            <DoubleSlider v-model="sliderPlaytime" :options="sliderOptsPlaytime"/>
           </b-form-group>
 
           <b-form-group
@@ -153,7 +165,7 @@
       <b-col>
         <b-row>
           <b-col>
-            <h3>{{filteredGames.length}} Games to choose from:</h3>
+            <h3>{{filteredGames.length}}{{filteredGames.length == displayGames.length? '' : `/${displayGames.length}`}} Games to choose from:</h3>
           </b-col>
           <b-col>
             <div v-if="displayGames.length > 1" >
@@ -319,13 +331,24 @@
 <script>
 import {BIconSearch, BIconPlus, BIconGear, BIconShare, BIconQuestionCircle} from 'bootstrap-vue'
 import GameSearchResult from '~/components/gameSearchResult.vue'
+import DoubleSlider from '~/components/doubleSlider.vue'
 import VueTour from 'vue-tour'
+import VueSlider from 'vue-slider-component'
 require('vue-tour/dist/vue-tour.css')
 import Steps from './tourSteps'
 Vue.use(VueTour)
 const entities = require("entities")
 var parseString = require('xml2js').parseString;
 import Vue from 'vue'
+
+// default theme
+import 'vue-slider-component/theme/default.css'
+
+// material theme
+// import 'vue-slider-component/theme/material.css'
+
+// antd theme
+// import 'vue-slider-component/theme/antd.css'
 
 export default {
   name: 'App',
@@ -335,7 +358,9 @@ export default {
     BIconGear,
     BIconShare,
     BIconQuestionCircle,
-    GameSearchResult
+    GameSearchResult,
+    DoubleSlider,
+    VueSlider
   },
   data () {
     return {
@@ -377,10 +402,30 @@ export default {
       collectionGames: [],
       extraGames: [],
       filteredGames: [],
-      filter: {
+      sliderOptsComplexity: {
+        min: 0,
+        max: 5,
+        interval: 0.1
+      },
+      sliderOptsNumPlayers: {
+        min: 1,
+        max: 12,
+        interval: 1
+      },
+      sliderOptsPlaytime: {
+        min: 0,
+        max: 120,
+        interval: 15
+      },
+      sliderComplexity: [0, 5],
+      sliderPlaytime: [0, 120],
+      sliderNumPlayers: [1, 12],
+      filterPlaytime: [0, 4],
+      preFilter: {
         name: null,
-        numplayers: null,
-        playtime: null,
+        complexity: [0,5],
+        playtime: [0,120],
+        numplayers: [0,12],
         publishyear: {
           oldest: 0,
           value: null,
@@ -430,6 +475,12 @@ export default {
     }
   },
   computed: {
+    filter () {
+      this.preFilter.complexity = this.sliderComplexity
+      this.preFilter.playtime = this.sliderPlaytime
+      this.preFilter.numplayers = this.sliderNumPlayers
+      return this.preFilter
+    },
     displayGames () {
       let allGames = this.collectionGames.concat(this.extraGames)
       return allGames.map((game) => {
@@ -543,7 +594,8 @@ export default {
       }
       if (localStorage.getItem('filter')) {
         try {
-          this.filter = JSON.parse(localStorage.getItem('filter'))
+          const result = JSON.parse(localStorage.getItem('filter'))
+          this.preFilter = result
         } catch(e) {
           localStorage.removeItem('filter')
         }
@@ -580,10 +632,15 @@ export default {
       })
     },
     filterGames (game, filter) {
-      if (filter.numplayers && filter.numplayers > game.maxplayers) return false
-      if (filter.numplayers && filter.numplayers < game.minplayers) return false
-      if (filter.playtime && filter.playtime > game.maxplaytime) return false
-      if (filter.playtime && filter.playtime < game.minplaytime) return false
+      if (filter.complexity[0] > 0 && game.complexity < filter.complexity[0]) return false
+      if (filter.complexity[1] < 5 && game.complexity > filter.complexity[1]) return false
+
+      if (filter.numplayers[0] > 1 && game.minplayers > filter.numplayers[0] ) return false
+      if (filter.numplayers[1] < 12 && game.maxplayers < filter.numplayers[1] ) return false // TODO: 12 max players is arbitrary
+
+      if (filter.playtime[0] > 0 && game.minplaytime > filter.playtime[0]) return false
+      if (filter.playtime[1] < 120 && game.maxplaytime < filter.playtime[1]) return false // TODO: 120 minutes is arbitrary
+
       if (filter.publishyear.value) {
         if(filter.publishyear.olderThan) {
           if (filter.publishyear.value <= game.publishyear) return false
