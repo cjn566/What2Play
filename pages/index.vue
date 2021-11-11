@@ -13,7 +13,7 @@
               :state="usernameValidationState"
               type="search" />
             <b-input-group-append is-text style="cursor:pointer" @click="getCollection">
-                <BIconSearch/>
+                <b-icon-search/>
             </b-input-group-append>
           </b-input-group>
           <b-button
@@ -92,69 +92,85 @@
         </b-form-group>
 
         <b-card id="filter-box" title="Filter games">
+          <div id="filter-switch-container">
+            Simple <span><b-checkbox switch v-model="preFilter.showAdvanced" size="sm">Advanced</b-checkbox></span>
+          </div>
 
-          <b-form-group
-            v-if="settings.showColumns.complexity"
-            label="complexity"
-            label-cols>
-            <DoubleSlider v-model="sliderComplexity" :options="sliderOptsComplexity"/>
-          </b-form-group>
+          <div id="simpleFilters" v-if="!preFilter.showAdvanced">
 
-          <b-form-group
-            v-if="settings.showColumns.players"
-            label="Number Of Players"
-            label-cols>
-            <DoubleSlider v-model="sliderNumPlayers" :options="sliderOptsNumPlayers"/>
-          </b-form-group>
+            <b-form-group
+              v-if="settings.showColumns.numPlayers"
+              label="Number of Players"
+              label-cols>
+              <b-form-input number v-model="preFilter.numPlayers[0]"/>
+            </b-form-group>
 
-          <b-form-group
-            v-if="settings.showColumns.playtime"
-            label="Play Time (mins)"
-            label-cols>
-            <DoubleSlider v-model="sliderPlaytime" :options="sliderOptsPlaytime"/>
-          </b-form-group>
+          </div>
+          <div id="advancedFilters" v-else>
+            <b-form-group
+              v-if="settings.showColumns.complexity"
+              label="complexity"
+              label-cols>
+              <DoubleSlider v-model="sliderComplexity" :options="sliderOptsComplexity"/>
+            </b-form-group>
 
-          <b-form-group
-            v-if="settings.showColumns.publishyear"
-            label="Year Published"
-            label-cols>
-            <b-input-group>
-              <b-form-input
-                v-model="filter.publishyear.value"
-                type="number" />
-              <b-input-group-append is-text>
-                <b-form-checkbox
-                  v-model="filter.publishyear.olderThan"
-                  v-b-tooltip.hover
-                  title="Only show games published before this year"
-                > Older Than </b-form-checkbox>
-              </b-input-group-append>
-            </b-input-group>
-          </b-form-group>
+            <b-form-group
+              v-if="settings.showColumns.players"
+              label="Number Of Players"
+              label-cols>
+              <DoubleSlider v-model="sliderNumPlayers" :options="sliderOptsNumPlayers"/>
+            </b-form-group>
 
-          <b-form-group
-            v-if="settings.showColumns.tags"
-            label="Tags"
-            label-cols>
-            <b-input-group>
-              <b-form-tags disabled placeholder="">
-                <b-form-tag
-                  v-for="tag, index in filter.tags"
-                  :key="index"
-                  :style="tagStyle(tag.match)"
-                  @remove="removeFilterTag(tag)">
-                    {{tag.name}}
-                </b-form-tag>
-              </b-form-tags>
-              <b-input-group-append is-text>
-                <b-form-checkbox
-                  v-model="filter.anyTag"
-                  v-b-tooltip.hover
-                  title="Show games that match any of these tags. Uncheck to only show games that match all tags."
-                > Any </b-form-checkbox>
-              </b-input-group-append>
-            </b-input-group>
-          </b-form-group>
+            <b-form-group
+              v-if="settings.showColumns.playtime"
+              label="Play Time (mins)"
+              label-cols>
+              <DoubleSlider v-model="sliderPlaytime" :options="sliderOptsPlaytime"/>
+            </b-form-group>
+
+            <b-form-group
+              v-if="settings.showColumns.publishyear"
+              label="Year Published"
+              label-cols>
+              <b-input-group>
+                <b-form-input
+                  v-model="filter.publishyear.value"
+                  type="number" />
+                <b-input-group-append is-text>
+                  <b-form-checkbox
+                    v-model="filter.publishyear.olderThan"
+                    v-b-tooltip.hover
+                    title="Only show games published before this year"
+                  > Older Than </b-form-checkbox>
+                </b-input-group-append>
+              </b-input-group>
+            </b-form-group>
+
+            <b-form-group
+              v-if="settings.showColumns.tags"
+              label="Tags"
+              label-cols>
+              <b-input-group>
+                <b-form-tags disabled placeholder="">
+                  <b-form-tag
+                    v-for="tag, index in filter.tags"
+                    :key="index"
+                    :style="tagStyle(tag.match)"
+                    @remove="removeFilterTag(tag)">
+                      {{tag.name}}
+                  </b-form-tag>
+                </b-form-tags>
+                <b-input-group-append is-text>
+                  <b-form-checkbox
+                    v-model="filter.anyTag"
+                    v-b-tooltip.hover
+                    title="Show games that match any of these tags. Uncheck to only show games that match all tags."
+                  > Any </b-form-checkbox>
+                </b-input-group-append>
+              </b-input-group>
+            </b-form-group>
+
+          </div>
 
         </b-card>
       </b-col>
@@ -188,15 +204,20 @@
             </b-modal>
           </b-col>
           <b-col>
-            <BIconGear @click="showSettingsModal = true" />
-            <BIconShare
+            <b-icon-gear @click="showSettingsModal = true" />
+            <b-icon-share
               v-b-tooltip.hover
               title="Copy Permalink"
               @click="copyPermalink()" />
-            <BIconQuestionCircle
+            <b-icon-question-circle
               v-b-tooltip.hover
               title="Take the Tour"
               @click="startTour()" />
+            <span class="list-view-icons">
+              <b-icon-grid @click="setListView('grid')" />
+              <b-icon-list @click="setListView('compact')" />
+              <b-icon-view-stacked @click="setListView('comfortable')" />
+            </span>
           </b-col>
         </b-row>
         <b-table
@@ -329,7 +350,7 @@
 </template>
 
 <script>
-import {BIconSearch, BIconPlus, BIconGear, BIconShare, BIconQuestionCircle} from 'bootstrap-vue'
+import {BootstrapVueIcons} from 'bootstrap-vue'
 import GameSearchResult from '~/components/gameSearchResult.vue'
 import DoubleSlider from '~/components/doubleSlider.vue'
 import VueTour from 'vue-tour'
@@ -340,6 +361,7 @@ Vue.use(VueTour)
 const entities = require("entities")
 var parseString = require('xml2js').parseString;
 import Vue from 'vue'
+Vue.use(BootstrapVueIcons)
 
 // default theme
 import 'vue-slider-component/theme/default.css'
@@ -353,17 +375,13 @@ import 'vue-slider-component/theme/default.css'
 export default {
   name: 'App',
   components: {
-    BIconSearch,
-    BIconPlus,
-    BIconGear,
-    BIconShare,
-    BIconQuestionCircle,
     GameSearchResult,
     DoubleSlider,
     VueSlider
   },
   data () {
     return {
+      listView: 'compact',
       steps: Steps,
       tourParams: {
         highlight: false,
@@ -421,7 +439,9 @@ export default {
       sliderPlaytime: [0, 120],
       sliderNumPlayers: [1, 12],
       filterPlaytime: [0, 4],
+      advancedFilter: true,
       preFilter: {
+        showAdvanced: false,
         name: null,
         complexity: [0,5],
         playtime: [0,120],
@@ -621,6 +641,9 @@ export default {
     }
   },
   methods: {
+    setListView (view) {
+      this.listView = view
+    },
     startTour () {
       this.$tours['tour'].start()
     },

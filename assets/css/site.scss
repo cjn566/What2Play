@@ -1,0 +1,18 @@
+@import './variables';
+
+@import '~bootstrap/scss/bootstrap.scss';
+@import '~bootstrap-vue/src/index.scss';
+
+html {
+  scroll-behavior: smooth;
+}
+
+.list-view-icons {
+  border: 1px solid black;
+  border-radius: 6px;
+  padding: 4px;
+}
+
+#filter-switch-container {
+  display: flex;
+}
