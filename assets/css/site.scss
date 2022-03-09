@@ -2,9 +2,33 @@
 
 @import '~bootstrap/scss/bootstrap.scss';
 @import '~bootstrap-vue/src/index.scss';
+@import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@400&display=swap');
 
 html {
   scroll-behavior: smooth;
+  font-size: 20px;
+  * {
+  font-family: 'Work Sans', sans-serif!important;
+  }
+
+  @media(min-width: 800px) {
+    font-size: 16px
+  }
+}
+
+h1, h2, h3 {
+  font-size: 1.35rem;
+  font-family: 'Work Sans', sans-serif!important;
+}
+h4, h5, h7 {
+  font-size: 1.25rem;
+}
+p, li, button {
+  font-size: 1rem;
+}
+
+body {
+  padding: 5vh 5vw;
 }
 
 .list-view-icons {
@@ -15,4 +39,24 @@ html {
 
 #filter-switch-container {
   display: flex;
+}
+
+.game-entry {
+  border: 1px solid grey;
+  border-radius: 10px;
+  margin: 20px;
+  padding: 20px;
+}
+
+.thumbnail-container {
+  width: 80px;
+  height: 80px;
+  background-color: deeppink;
+  thumb {
+    object-fit: contain;
+  }
+}
+
+.m-section {
+  margin-bottom: 1em;
 }
